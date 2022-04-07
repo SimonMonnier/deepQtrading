@@ -42,7 +42,7 @@ class TradingEnv():
         self.buy_price = None
         self.sell_price = None
         self.nstep = 0
-        self.max_step = 1440 * episode_lenght
+        self.max_step = 90 * episode_lenght
         self.episode_data = self._get_dataset_sample()
         self.state = self.episode_data[self.nstep:period]
 
@@ -56,7 +56,7 @@ class TradingEnv():
     def _init_dataset(self, dataset_path, episode_lenght):
         df = pd.read_csv(dataset_path, sep=',')
         size = df.shape[0]
-        min_by_day = 1440 * episode_lenght
+        min_by_day = 90 * episode_lenght
         split_size = size / min_by_day
         split_dataset = np.array_split(df, split_size)
         return split_dataset
@@ -100,7 +100,7 @@ class TradingEnv():
 
     def step(self, action):
         done = False
-        reward = -1  # self._get_profit()
+        reward = self._get_profit()
         self.nstep += 1
 
         if len(self.episode_data) <= self.nstep + self.period:
@@ -118,22 +118,27 @@ class TradingEnv():
         if self.trade == False and action == BUY:
             self.trade = True
             self.buy_price = price
-            reward = 5
+            reward = 2
 
         if self.trade == False and action == SELL:
             self.trade = True
             self.sell_price = price
-            reward = 5
+            reward = 2
 
         if action == HOLD:
-            if reward > 0:
-                reward += (self._get_profit() * self.nlot)
-            elif reward < 0:
-                reward -= (self._get_profit() * self.nlot)
+            if self._get_profit() > 0:
+                reward = (self._get_profit() * self.nlot)
+            elif self._get_profit() < 0:
+                reward = (self._get_profit() * self.nlot)
         # Trade action
         if self.trade == True and action == CLOSE:
-            reward = self._get_profit()
-            self.sold = (reward * self.nlot) + self.sold
+            if (self._get_profit() > 0):
+                reward = self._get_profit() * self.nlot * 10
+            elif (self._get_profit() > 0):
+                reward = self._get_profit() * self.nlot
+            else:
+                reward = -5
+            self.sold = reward  + self.sold
             self.trade_sold = self.sold
             self.buy_price = None
             self.sell_price = None

@@ -91,7 +91,7 @@ class DQNAgent():
     # Choose an action depending on the state using policy network
     #
     def _choose_action(self, state):
-        state = torch.tensor([state], device=self.device)
+        state = torch.tensor(np.array([state]), device=self.device)
         state = torch.flatten(state)
         with torch.no_grad():  # No grad because we use the model to select an action and not for training
             predicted = self.policy_net(state)
@@ -114,9 +114,9 @@ class DQNAgent():
     def _memorize(self, state, action, new_state, reward, done):
         state = np.array(state)
         new_state = np.array(new_state)
-        experience = Experience(torch.tensor([state], device=self.device),
+        experience = Experience(torch.tensor(np.array([state]), device=self.device),
                                 torch.tensor([action], device=self.device),
-                                torch.tensor([new_state],
+                                torch.tensor(np.array([new_state]),
                                              device=self.device),
                                 torch.tensor([reward], device=self.device),
                                 torch.tensor([done], device=self.device, dtype=torch.bool))
@@ -175,6 +175,8 @@ class DQNAgent():
             run = wandb.init(project="DeepTrading", entity="smonnier")
         num_episodes = 5000
         max_step = 2000
+        solde = 10000
+        benefice = 0
         try:
             for episode in range(num_episodes):
                 print(
@@ -188,6 +190,7 @@ class DQNAgent():
                     self._memorize(state, action, new_state, reward, done)
                     state = new_state
                     episode_reward += reward
+                    benefice += self.env.sold - solde
 
                     if self.memory.get_current_len() >= self.batch_size:  # Train model
                         self._train_model()
@@ -201,9 +204,10 @@ class DQNAgent():
                         self.policy_net.state_dict())  # update target network
 
                 if wandb_log == True:
+
                     wandb.log({"reward": episode_reward, "duration": step,
                               "epsilon": self._get_epsilon(episode), "learning_rate": self.current_lr,
-                               "solde": self.env.sold})
+                               "solde": self.env.sold, "total_benefice": benefice})
             if wandb_log == True:
                 run.finish()
             self._save()  # save trained model
