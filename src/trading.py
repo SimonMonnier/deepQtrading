@@ -1,9 +1,10 @@
 import numpy as np
 import pandas as pd
 import random
-import time
 import plotly.graph_objects as go
-from gym import Env, spaces, utils
+from gym import spaces
+# import mplfinance as mpf
+# import cv2
 
 DFOPEN = 0
 DFHIGH = 1
@@ -42,9 +43,10 @@ class TradingEnv():
         self.buy_price = None
         self.sell_price = None
         self.nstep = 0
-        self.max_step = 90 * episode_lenght
+        self.max_step = 1440 * episode_lenght
         self.episode_data = self._get_dataset_sample()
         self.state = self.episode_data[self.nstep:period]
+        self.total_trade = 0
 
     def _get_dataset_sample(self):
         segment = self.dataset[random.randrange(0, len(self.dataset))]
@@ -56,7 +58,7 @@ class TradingEnv():
     def _init_dataset(self, dataset_path, episode_lenght):
         df = pd.read_csv(dataset_path, sep=',')
         size = df.shape[0]
-        min_by_day = 90 * episode_lenght
+        min_by_day = 1440 * episode_lenght
         split_size = size / min_by_day
         split_dataset = np.array_split(df, split_size)
         return split_dataset
@@ -67,9 +69,12 @@ class TradingEnv():
         self.sold = self.start_sold
         self.trade_sold = self.sold
         self.nstep = 0
+        self.total_trade = 0
         self.episode_data = self._get_dataset_sample()
         self.state = self.episode_data[0:self.period]
-        return self.state
+        state = np.append(np.append(np.append(self.state, 0),0),0)
+        
+        return state
 
     def render(self):
         df = pd.DataFrame(self.state)
@@ -100,58 +105,90 @@ class TradingEnv():
 
     def step(self, action):
         done = False
-        reward = self._get_profit()
+        reward = 0
         self.nstep += 1
 
         if len(self.episode_data) <= self.nstep + self.period:
             done = True
+
             if self.trade == True:
                 action = CLOSE
 
         price = self.state[-1][DFCLOSE]
 
-        if self.trade and (action == SELL or action == BUY):
-            reward = -10
-        if self.trade == False and action == CLOSE and self.nstep < 100:
-            reward = -10
+        if self.trade and (action == SELL or action == BUY) and self._get_profit() <= 0:
+            reward = -1
+        if self.trade == False and action == CLOSE and self._get_profit() <= 0:
+            reward = -1
 
         if self.trade == False and action == BUY:
             self.trade = True
+            self.total_trade += 1
             self.buy_price = price
             reward = 2
 
         if self.trade == False and action == SELL:
             self.trade = True
+            self.total_trade += 1
             self.sell_price = price
             reward = 2
 
-        if action == HOLD:
-            if self._get_profit() > 0:
-                reward = (self._get_profit() * self.nlot)
-            elif self._get_profit() < 0:
-                reward = (self._get_profit() * self.nlot)
-        # Trade action
-        if self.trade == True and action == CLOSE:
-            if (self._get_profit() > 0):
-                reward = self._get_profit() * self.nlot * 10
-            elif (self._get_profit() > 0):
-                reward = self._get_profit() * self.nlot
-            else:
-                reward = -5
-            self.sold = reward  + self.sold
+        if action == HOLD and self.trade == True and self._get_profit() > 0:
+            reward = (10 * self._get_profit() * self.nlot)
+        elif action == HOLD and self.trade == True and self._get_profit() <= 0:
+            reward = -1
+
+        if action == HOLD and self.trade == False:
+            reward = 0
+        
+        if self.trade == True and action == CLOSE and self._get_profit() > 0:
+            reward = (10 * self._get_profit() * self.nlot)
+            self.sold = (self._get_profit() * self.nlot) + self.sold
+            self.trade_sold = self.sold
+            self.buy_price = None
+            self.sell_price = None
+            self.trade = False
+        elif self.trade == True and action == CLOSE and self._get_profit() <= 0:
+            reward = 1
+            self.sold = (self._get_profit() * self.nlot) + self.sold
             self.trade_sold = self.sold
             self.buy_price = None
             self.sell_price = None
             self.trade = False
 
-        if self.trade_sold < self.min_sold:
+        if self.trade_sold < self.min_sold or self.sold < self.min_sold:
             done = True
-            reward = -20
+            self.sold = (self._get_profit() * self.nlot) + self.sold
+            self.trade_sold = self.sold
+            reward = -100
 
+        if (action == HOLD or action == BUY or action == SELL) and self.trade == True and self._get_profit() < 0:
+            reward = reward - (10 * self._get_profit() * self.nlot)
+        if (action == BUY or action == SELL) and self._get_profit() > 0:
+            reward = reward +10
+        if (action == BUY or action == SELL) and self._get_profit() <= 0:
+            reward = reward -10
         # Update state
         self.state = self.episode_data[self.nstep:(self.nstep+self.period)]
 
         # Update trade sold
         self.trade_sold = (self._get_profit() * self.nlot) + self.sold
 
-        return self.state, reward, done
+        trade_state = 0
+        if (self.trade == True and self.buy_price != None):
+            trade_state = 1
+            state = np.append(np.append(np.append(self.state, trade_state), self._get_profit()),self.buy_price)
+        if (self.trade == True and self.sell_price != None):
+            trade_state = 2
+            state = np.append(np.append(np.append(self.state, trade_state), self._get_profit()), self.sell_price)
+        else:
+            state = np.append(np.append(np.append(self.state, trade_state), self._get_profit()),0)
+        # df = pd.DataFrame(self.state)
+        # mpf.plot(df, type='candle', style='charles', savefig='test-mplfiance.png')
+        # img_path = r"C:\Users\smonn\Desktop\DeepTrading\src\test-mplfiance.png"
+
+        # img = cv2.imread(img_path)
+        # # img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+        # state = cv2.resize(img, (180,180))
+
+        return state, reward, done

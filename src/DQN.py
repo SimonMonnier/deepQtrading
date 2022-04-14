@@ -9,7 +9,7 @@ import numpy as np
 
 class DQN(object):
     
-    def __init__(self, max_memory = 1618, discount = 0.9):
+    def __init__(self, max_memory = 1618033, discount = 0.9):
         self.max_memory = max_memory
         self.discount = discount
         self.memory = list()

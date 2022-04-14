@@ -18,15 +18,19 @@ import numpy as np
 Config = namedtuple(
     'Config', ('target_update', 'lr', 'lr_min', 'lr_decay', 'gamma', 'loss', 'memory_size', 'batch_size', 'eps_start', 'eps_min', 'eps_decay'))
 
+BUY = 0
+SELL = 1
+CLOSE = 2
+HOLD = 3
 
 class DQNAgent():
     def __init__(self, env, config: Config = {}, id=""):
         self.env = env
         self.num_actions = self.env.action_space.n
         
-        self.policy_net = DQN(104,
+        self.policy_net = DQN(55,
                               self.num_actions).to("cuda:0")
-        self.target_net = DQN(104,
+        self.target_net = DQN(55,
                               self.num_actions).to("cuda:0")
         self.policy_net = self.policy_net.double()
         self.target_net = self.target_net.double()
@@ -82,8 +86,12 @@ class DQNAgent():
     # Update the learning rate using logarithme decay
     #
     def _update_learning_rate(self, episode):
+        
+        
         self.current_lr = self.log_decay(
-            self.lr, self.lr_min, self.lr_decay, episode)
+        self.lr, self.lr_min, self.lr_decay, episode)
+
+        
         for param_group in self.optimizer.param_groups:
             param_group['lr'] = self.current_lr
 
@@ -173,9 +181,9 @@ class DQNAgent():
     def fit(self, wandb_log):
         if wandb_log == True:
             run = wandb.init(project="DeepTrading", entity="smonnier")
-        num_episodes = 5000
+        num_episodes = 3000
         max_step = 2000
-        solde = 10000
+        solde = 1000
         benefice = 0
         try:
             for episode in range(num_episodes):
@@ -184,13 +192,16 @@ class DQNAgent():
 
                 state = self.env.reset()
                 episode_reward = 0
+                episode_action = [0,0,0,0]
                 for step in range(max_step):
+                    
                     action = self._select_action(state, episode)
+                    episode_action[action] += 1
                     new_state, reward, done = self.env.step(action)
                     self._memorize(state, action, new_state, reward, done)
                     state = new_state
                     episode_reward += reward
-                    benefice += self.env.sold - solde
+                    
 
                     if self.memory.get_current_len() >= self.batch_size:  # Train model
                         self._train_model()
@@ -203,11 +214,18 @@ class DQNAgent():
                     self.target_net.load_state_dict(
                         self.policy_net.state_dict())  # update target network
 
+                benefice = benefice + self.env.sold - solde
+
                 if wandb_log == True:
 
                     wandb.log({"reward": episode_reward, "duration": step,
                               "epsilon": self._get_epsilon(episode), "learning_rate": self.current_lr,
-                               "solde": self.env.sold, "total_benefice": benefice})
+                               "solde": self.env.sold, "total_benefice": benefice, 
+                               "Buy": episode_action[BUY],
+                               "Sell": episode_action[SELL],
+                               "Hold": episode_action[HOLD],
+                               "Close": episode_action[CLOSE],
+                               "Total trade": self.env.total_trade})
             if wandb_log == True:
                 run.finish()
             self._save()  # save trained model
