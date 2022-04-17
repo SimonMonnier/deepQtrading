@@ -181,7 +181,7 @@ class DQNAgent():
     def fit(self, wandb_log):
         if wandb_log == True:
             run = wandb.init(project="DeepTrading", entity="smonnier")
-        num_episodes = 3000
+        num_episodes = 5000
         max_step = 2000
         solde = 1000
         benefice = 0
