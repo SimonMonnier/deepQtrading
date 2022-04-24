@@ -43,7 +43,7 @@ class TradingEnv():
         self.buy_price = None
         self.sell_price = None
         self.nstep = 0
-        self.max_step = 300 * episode_lenght
+        self.max_step = 1640 * episode_lenght
         self.episode_data = self._get_dataset_sample()
         self.state = self.episode_data[self.nstep:period]
         self.total_trade = 0
@@ -58,7 +58,7 @@ class TradingEnv():
     def _init_dataset(self, dataset_path, episode_lenght):
         df = pd.read_csv(dataset_path, sep=',')
         size = df.shape[0]
-        min_by_day = 1440 * episode_lenght
+        min_by_day = 1640 * episode_lenght
         split_size = size / min_by_day
         split_dataset = np.array_split(df, split_size)
         return split_dataset
@@ -72,7 +72,7 @@ class TradingEnv():
         self.total_trade = 0
         self.episode_data = self._get_dataset_sample()
         self.state = self.episode_data[0:self.period]
-        state = np.append(np.append(np.append(self.state, 0),0),0)
+        state = np.append(np.append(self.state, 0),0)
         
         return state
 
@@ -93,14 +93,43 @@ class TradingEnv():
         print('Profit: '+str(self._get_profit()))
         print('Sold: '+str(self.sold))
         print('Trade sold: {0}'.format(self.trade_sold))
+        print('Trade State: {0}'.format(self.trade))
 
     def _get_profit(self):
         profit = 0
+        state = self.episode_data[self.nstep:(self.nstep+self.period)]
+        price = state[-1][DFCLOSE]
+        if self.trade and self.buy_price != None:
+            # profit = price - (self.buy_price + self.spread)
+            profit = price - self.buy_price
+        if self.trade and self.sell_price != None:
+            # profit = (self.sell_price - self.spread) - price
+            profit = self.sell_price - price
+        return profit
+
+    def _take_profit(self):
+        profit = 0
+        
         price = self.state[-1][DFCLOSE]
         if self.trade and self.buy_price != None:
             profit = price - (self.buy_price + self.spread)
+            # profit = price - self.buy_price
         if self.trade and self.sell_price != None:
             profit = (self.sell_price - self.spread) - price
+            # profit = self.sell_price - price
+        return profit
+    
+    def _check_stoploss(self):
+        profit = 0
+        state = self.episode_data[self.nstep:(self.nstep+self.period)]
+        price = state[-1][DFLOW]
+
+        if self.trade and self.buy_price != None:
+            profit = price - (self.buy_price + self.spread)
+            # profit = price - self.buy_price
+        if self.trade and self.sell_price != None:
+            profit = (self.sell_price - self.spread) - price
+            # profit = self.sell_price - price
         return profit
 
     def step(self, action):
@@ -116,79 +145,103 @@ class TradingEnv():
 
         price = self.state[-1][DFCLOSE]
 
-        if self.trade and (action == SELL or action == BUY) and self._get_profit() <= 0:
-            reward = -10
-        if self.trade == False and action == CLOSE and self._get_profit() <= 0:
-            reward = -10
-
         if self.trade == False and action == BUY:
             self.trade = True
             self.total_trade += 1
             self.buy_price = price
-            reward = 10
+            if self._get_profit() > 0:
+                reward = 10
+            elif self._get_profit() < 0:
+                reward = -100
+            else:
+                reward = 0
 
         if self.trade == False and action == SELL:
             self.trade = True
             self.total_trade += 1
             self.sell_price = price
-            reward = 10
+            if self._get_profit() > 0:
+                reward = 10
+            elif self._get_profit() < 0:
+                reward = -100
+            else:
+                reward = 0
 
-        if action == HOLD and self.trade == True and self._get_profit() > 0:
-            reward = 10
-        elif action == HOLD and self.trade == True and self._get_profit() <= 0:
-            reward = -10
+        if self.trade == True and (action == BUY or action == SELL):
+            reward = -1
 
-        if action == HOLD and self.trade == False:
-            reward = -10
+        if action == HOLD and self.trade == True:
+            if self._get_profit() > 0:
+                reward = 1
+            elif self._get_profit() < 0:
+                reward = -10
+            else:
+                reward = 0
+        elif action == HOLD and self.trade == False:
+            if self._get_profit() > 0:
+                reward = 1
+            elif self._get_profit() < 0:
+                reward = -10
+            else:
+                reward = 0
         
-        if self.trade == True and action == CLOSE and self._get_profit() > 0:
-            reward = 100
-            self.sold = (self._get_profit() * self.nlot) + self.sold
+        if self.trade == True and action == CLOSE:
+            self.sold = (self._take_profit() * self.nlot) + self.sold
             self.trade_sold = self.sold
+            
+            print("action CLOSE", (self._take_profit() * self.nlot))
+            if self._take_profit() > 0:
+                reward = 1000
+            elif self._take_profit() < 0:
+                reward = 10
+            else:
+                reward = self._take_profit() * self.nlot
             self.buy_price = None
             self.sell_price = None
             self.trade = False
-        elif self.trade == True and action == CLOSE and self._get_profit() <= 0:
-            reward = 0
-            self.sold = (self._get_profit() * self.nlot) + self.sold
-            self.trade_sold = self.sold
-            self.buy_price = None
-            self.sell_price = None
-            self.trade = False
+        
+        if self.trade == False and action == CLOSE:
+            reward = -10
+
+        if self.trade == True and self._take_profit() * self.nlot < -3 and (action == BUY or action == HOLD or action == SELL):
+            reward = -1000
+
 
         if self.trade_sold < self.min_sold or self.sold < self.min_sold:
             done = True
-            self.sold = (self._get_profit() * self.nlot) + self.sold
+            self.sold = (self._take_profit() * self.nlot) + self.sold
             self.trade_sold = self.sold
-            reward = -1000
+            reward = -10000
 
-        if (action == HOLD or action == BUY or action == SELL) and self.trade == True and self._get_profit() < 0:
-            reward = reward - 100
-        if (action == BUY or action == SELL) and self._get_profit() > 0:
-            reward = reward + 10
-        if (action == BUY or action == SELL) and self._get_profit() <= 0:
-            reward = reward -10
+        # TEEEEESSSSSTTTTT
+        if self.trade == True and self._check_stoploss() * self.nlot < -5:
+            reward = -1000
+            if self._take_profit() * self.nlot < 0:
+                self.sold = self.sold - 5
+                print("action STOP LOSS", -5)
+            elif self._take_profit() * self.nlot > 0:
+                self.sold = self.sold - 5
+                print("action STOP LOSS", -5)
+            self.trade_sold = self.sold
+            
+            self.buy_price = None
+            self.sell_price = None
+            self.trade = False
+
         # Update state
         self.state = self.episode_data[self.nstep:(self.nstep+self.period)]
 
         # Update trade sold
-        self.trade_sold = (self._get_profit() * self.nlot) + self.sold
+        self.trade_sold = (self._take_profit() * self.nlot) + self.sold
 
         trade_state = 0
         if (self.trade == True and self.buy_price != None):
             trade_state = 1
-            state = np.append(np.append(np.append(self.state, trade_state), self._get_profit()),self.buy_price)
+            state = np.append(np.append(self.state, trade_state),self._take_profit())
         if (self.trade == True and self.sell_price != None):
             trade_state = 2
-            state = np.append(np.append(np.append(self.state, trade_state), self._get_profit()), self.sell_price)
+            state = np.append(np.append(self.state, trade_state),self._take_profit())
         else:
-            state = np.append(np.append(np.append(self.state, trade_state), self._get_profit()),0)
-        # df = pd.DataFrame(self.state)
-        # mpf.plot(df, type='candle', style='charles', savefig='test-mplfiance.png')
-        # img_path = r"C:\Users\smonn\Desktop\DeepTrading\src\test-mplfiance.png"
-
-        # img = cv2.imread(img_path)
-        # # img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-        # state = cv2.resize(img, (180,180))
+            state = np.append(np.append(self.state, trade_state),self._take_profit())
 
         return state, reward, done

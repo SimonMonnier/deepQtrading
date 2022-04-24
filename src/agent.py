@@ -28,9 +28,9 @@ class DQNAgent():
         self.env = env
         self.num_actions = self.env.action_space.n
         
-        self.policy_net = DQN(55,
+        self.policy_net = DQN(802,
                               self.num_actions).to("cuda:0")
-        self.target_net = DQN(55,
+        self.target_net = DQN(802,
                               self.num_actions).to("cuda:0")
         self.policy_net = self.policy_net.double()
         self.target_net = self.target_net.double()
@@ -181,8 +181,8 @@ class DQNAgent():
     def fit(self, wandb_log):
         if wandb_log == True:
             run = wandb.init(project="DeepTrading", entity="smonnier")
-        num_episodes = 5000
-        max_step = 2000
+        num_episodes = 2000
+        max_step = 2880
         solde = 1000
         benefice = 0
         try:
@@ -225,6 +225,7 @@ class DQNAgent():
                                "Sell": episode_action[SELL],
                                "Hold": episode_action[HOLD],
                                "Close": episode_action[CLOSE],
+                                "Trade Sold": self.env.trade_sold,
                                "Total trade": self.env.total_trade})
             if wandb_log == True:
                 run.finish()
@@ -256,7 +257,7 @@ class DQNAgent():
         self.policy_net.eval()  # model in eval mode, not training
 
     def play_game(self, n_game):
-        max_step = 2000
+        max_step = 1440
         for episode in range(n_game):
             state = self.env.reset()
             game = "*** Game {0} ***\n".format(episode + 1)
@@ -281,27 +282,60 @@ class DQNAgent():
                     clear_output(wait=True)
                     break
 
-    def evaluate(self, n_game):
-        total_steps, total_penalties = 0, 0
-        max_steps = 2000
-        for i in range(n_game):
-            percent = round(((i + 1) / n_game) * 100)
-            print("Loading {0}%".format(percent), end='\r')
-            state = self.env.reset()
-            penalties, reward = 0, 0
-            for step in range(max_steps):
-                action = self._choose_action(state)
-                state, reward, done = self.env.step(action)
-                if reward == -10:
-                    penalties += 1
-                if done == True:
-                    break
-                if step >= max_steps:
-                    penalties += 1
-                    break
-            total_penalties += penalties
-            total_steps += step
-        print(f"Results after {n_game} episodes:")
-        print(f"Average timesteps per episode: {total_steps / n_game}")
-        print(f"Average penalties per episode: {total_penalties / n_game}")
-        return total_steps/n_game, total_penalties/n_game
+    def evaluate(self, wandb_log):
+        if wandb_log == True:
+            run = wandb.init(project="DeepTrading", entity="smonnier")
+        num_episodes = 2000
+        max_step = 2880
+        solde = 1000
+        benefice = 0
+        try:
+            for episode in range(num_episodes):
+                print(
+                    "Training episode: {0}/{1}".format(episode+1, num_episodes), end="\r")
+
+                state = self.env.reset()
+                episode_reward = 0
+                episode_action = [0,0,0,0]
+                for step in range(max_step):
+                    
+                    action = self._select_action(state, episode)
+                    episode_action[action] += 1
+                    new_state, reward, done = self.env.step(action)
+                    # self._memorize(state, action, new_state, reward, done)
+                    state = new_state
+                    episode_reward += reward
+                    
+
+                    # if self.memory.get_current_len() >= self.batch_size:  # Train model
+                    #     self._train_model()
+
+                    if done:
+                        break
+
+                # self._update_learning_rate(episode)
+                # if episode % self.target_update == 0:
+                #     self.target_net.load_state_dict(
+                #         self.policy_net.state_dict())  # update target network
+
+                benefice = benefice + self.env.sold - solde
+
+                if wandb_log == True:
+
+                    wandb.log({"reward": episode_reward, "duration": step,
+                              "epsilon": self._get_epsilon(episode), "learning_rate": self.current_lr,
+                               "solde": self.env.sold, "total_benefice": benefice, 
+                               "Buy": episode_action[BUY],
+                               "Sell": episode_action[SELL],
+                               "Hold": episode_action[HOLD],
+                               "Close": episode_action[CLOSE],
+                                "Trade Sold": self.env.trade_sold,
+                               "Total trade": self.env.total_trade})
+            if wandb_log == True:
+                run.finish()
+            self._save()  # save trained model
+        except KeyboardInterrupt:
+            self._save()
+            if wandb_log == True:
+                run.finish()
+            print("Training has been interrupted")

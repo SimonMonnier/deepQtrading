@@ -19,7 +19,7 @@ class DQN(object):
         if len(self.memory) > self.max_memory:
             del self.memory[0]
             
-    def get_batch(self, model, batch_size = 10):
+    def get_batch(self, model, batch_size = 30):
         len_memory = len(self.memory)
         num_inputs = self.memory[0][0][0].shape(1)
         num_outputs = model.output_shape[-1]
