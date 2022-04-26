@@ -189,7 +189,7 @@ class TradingEnv():
             self.sold = (self._take_profit() * self.nlot) + self.sold
             self.trade_sold = self.sold
             
-            print("action CLOSE", (self._take_profit() * self.nlot))
+            # print("action CLOSE", (self._take_profit() * self.nlot))
             if self._take_profit() > 0:
                 reward = 1000
             elif self._take_profit() < 0:
@@ -214,14 +214,14 @@ class TradingEnv():
             reward = -10000
 
         # TEEEEESSSSSTTTTT
-        if self.trade == True and self._check_stoploss() * self.nlot < -5:
-            reward = -1000
+        if self.trade == True and self._check_stoploss() * self.nlot < -2:
+            reward = -10000
             if self._take_profit() * self.nlot < 0:
-                self.sold = self.sold - 5
-                print("action STOP LOSS", -5)
+                self.sold = self.sold - 4
+                # print("action STOP LOSS", -0.1)
             elif self._take_profit() * self.nlot > 0:
-                self.sold = self.sold - 5
-                print("action STOP LOSS", -5)
+                self.sold = self.sold - 4
+                # print("action STOP LOSS", -0.1)
             self.trade_sold = self.sold
             
             self.buy_price = None
