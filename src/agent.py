@@ -5,6 +5,8 @@ import math
 import torch
 from src.model import DQN
 from src.memory import ReplayMemory, Experience
+# from model import DQN
+# from memory import ReplayMemory, Experience
 from collections import namedtuple
 import torch
 import torch.nn as nn
@@ -24,9 +26,10 @@ CLOSE = 2
 HOLD = 3
 
 class DQNAgent():
-    def __init__(self, env, config: Config = {}, id=""):
+    def __init__(self, env=None, config: Config = {}, id=""):
         self.env = env
-        self.num_actions = self.env.action_space.n
+        # self.num_actions = self.env.action_space.n
+        self.num_actions = 4
         
         self.policy_net = DQN(802,
                               self.num_actions).to("cuda:0")

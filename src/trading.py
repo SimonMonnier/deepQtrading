@@ -151,10 +151,10 @@ class TradingEnv():
             self.trade = False
             if self._take_profit() * self.nlot <= 0:
                 self.sold = self.sold - 4
-                print("STOP LOSS #################", -4)
+                # print("STOP LOSS #################", -4)
             elif self._take_profit() * self.nlot >= 0:
                 self.sold = self.sold - 4
-                print("STOP LOSS #################", -4)
+                # print("STOP LOSS #################", -4)
             self.trade_sold = self.sold
             
             self.buy_price = None
@@ -164,9 +164,9 @@ class TradingEnv():
             self.trade = True
             self.total_trade += 1
             self.buy_price = price
-            print("BUY :", self._get_profit() * self.nlot)
+            # print("BUY :", self._get_profit() * self.nlot)
             if self._get_profit() > 0:
-                reward = 25
+                reward = 400
             elif self._get_profit() < 0:
                 reward = -100
             else:
@@ -176,44 +176,44 @@ class TradingEnv():
             self.trade = True
             self.total_trade += 1
             self.sell_price = price
-            print("SELL :", self._get_profit() * self.nlot)
+            # print("SELL :", self._get_profit() * self.nlot)
             if self._get_profit() > 0:
-                reward = 25
+                reward = 400
             elif self._get_profit() < 0:
-                reward = -100
+                reward = -50
             else:
                 reward = 0
 
         if self.trade == True and (action == BUY or action == SELL):
-            reward = -50
+            reward = -40
 
         if action == HOLD and self.trade == True:
-            print("HOLD :", self._take_profit() * self.nlot)
+            # print("HOLD :", self._take_profit() * self.nlot)
             if self._get_profit() > 0:
-                reward = 1
+                reward = 100
             elif self._get_profit() < 0:
-                reward = -10
+                reward = -100
             else:
-                reward = 0
+                reward = -10
         elif action == HOLD and self.trade == False:
             if self._get_profit() > 0:
-                reward = 1
+                reward = 50
             elif self._get_profit() < 0:
-                reward = -100
+                reward = -80
             else:
-                reward = -100
+                reward = -60
             
 
         if self.trade == True and action == CLOSE:
             self.sold = (self._take_profit() * self.nlot) + self.sold
             self.trade_sold = self.sold
-            print("CLOSE", self._take_profit() * self.nlot)
+            # print("CLOSE", self._take_profit() * self.nlot)
             if self._take_profit() > 0:
-                reward = 1000
+                reward = 1500
             elif self._take_profit() < 0:
-                reward = 10
+                reward = -30
             else:
-                reward = self._take_profit() * self.nlot
+                reward = -10
             self.buy_price = None
             self.sell_price = None
             self.trade = False
@@ -221,15 +221,11 @@ class TradingEnv():
         if self.trade == False and action == CLOSE:
             reward = -50
 
-        if self.trade == True and self._take_profit() * self.nlot < -3 and (action == BUY or action == HOLD or action == SELL):
-            reward = -1000
-
-
         if self.trade_sold < self.min_sold or self.sold < self.min_sold:
             done = True
             self.sold = (self._take_profit() * self.nlot) + self.sold
             self.trade_sold = self.sold
-            reward = -10000000
+            reward = -10000
 
         # Update state
         self.state = self.episode_data[self.nstep:(self.nstep+self.period)]
