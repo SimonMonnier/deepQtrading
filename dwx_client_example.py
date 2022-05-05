@@ -11,7 +11,7 @@ from api.dwx_client import dwx_client
 
 import numpy as np
 
-from agent import DQNAgent, Config
+from src.agent import DQNAgent, Config
 
 
 DFOPEN = 0
