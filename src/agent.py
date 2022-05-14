@@ -21,15 +21,24 @@ Config = namedtuple(
     'Config', ('target_update', 'lr', 'lr_min', 'lr_decay', 'gamma', 'loss', 'memory_size', 'batch_size', 'eps_start', 'eps_min', 'eps_decay'))
 
 BUY = 0
-SELL = 1
-CLOSE = 2
-HOLD = 3
+BUY_2 = 1
+SELL = 2
+SELL_2 = 3
+CLOSE = 4
+CLOSE_2 = 5
+CLOSE_3 = 6
+HOLD = 7
+# BUY = 0
+# SELL = 1
+# CLOSE = 2
 
 class DQNAgent():
     def __init__(self, env=None, config: Config = {}, id=""):
         self.env = env
+
+        self.action1 = 0
         # self.num_actions = self.env.action_space.n
-        self.num_actions = 4
+        self.num_actions = 8
         
         self.policy_net = DQN(802,
                               self.num_actions).to("cuda:0")
@@ -185,7 +194,7 @@ class DQNAgent():
         if wandb_log == True:
             run = wandb.init(project="DeepTrading", entity="smonnier")
         num_episodes = 2000
-        max_step = 2880
+        max_step = 756
         solde = 1000
         benefice = 0
         try:
@@ -195,7 +204,7 @@ class DQNAgent():
 
                 state = self.env.reset()
                 episode_reward = 0
-                episode_action = [0,0,0,0]
+                episode_action = [0,0,0,0,0,0,0,0]
                 for step in range(max_step):
                     
                     action = self._select_action(state, episode)
@@ -225,9 +234,13 @@ class DQNAgent():
                               "epsilon": self._get_epsilon(episode), "learning_rate": self.current_lr,
                                "solde": self.env.sold, "total_benefice": benefice, 
                                "Buy": episode_action[BUY],
+                               "Buy_2": episode_action[BUY_2],
                                "Sell": episode_action[SELL],
+                               "Sell_2": episode_action[SELL_2],
                                "Hold": episode_action[HOLD],
                                "Close": episode_action[CLOSE],
+                               "Close_2": episode_action[CLOSE_2],
+                               "Close_3": episode_action[CLOSE_3],
                                 "Trade Sold": self.env.trade_sold,
                                "Total trade": self.env.total_trade})
             if wandb_log == True:
@@ -299,27 +312,17 @@ class DQNAgent():
 
                 state = self.env.reset()
                 episode_reward = 0
-                episode_action = [0,0,0,0]
+                episode_action = [0,0,0,0,0,0,0,0]
                 for step in range(max_step):
                     
-                    action = self._select_action(state, episode)
+                    action = self._choose_action(state)
                     episode_action[action] += 1
                     new_state, reward, done = self.env.step(action)
-                    # self._memorize(state, action, new_state, reward, done)
                     state = new_state
                     episode_reward += reward
-                    
-
-                    # if self.memory.get_current_len() >= self.batch_size:  # Train model
-                    #     self._train_model()
 
                     if done:
                         break
-
-                # self._update_learning_rate(episode)
-                # if episode % self.target_update == 0:
-                #     self.target_net.load_state_dict(
-                #         self.policy_net.state_dict())  # update target network
 
                 benefice = benefice + self.env.sold - solde
 
@@ -329,9 +332,13 @@ class DQNAgent():
                               "epsilon": self._get_epsilon(episode), "learning_rate": self.current_lr,
                                "solde": self.env.sold, "total_benefice": benefice, 
                                "Buy": episode_action[BUY],
+                               "Buy_2": episode_action[BUY_2],
                                "Sell": episode_action[SELL],
+                               "Sell_2": episode_action[SELL_2],
                                "Hold": episode_action[HOLD],
                                "Close": episode_action[CLOSE],
+                               "Close_2": episode_action[CLOSE_2],
+                               "Close_3": episode_action[CLOSE_3],
                                 "Trade Sold": self.env.trade_sold,
                                "Total trade": self.env.total_trade})
             if wandb_log == True:

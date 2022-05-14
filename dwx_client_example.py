@@ -7,11 +7,19 @@ from traceback import print_exc
 from random import random
 from datetime import datetime, timedelta
 
-from api.dwx_client import dwx_client
+from dwx_client import dwx_client
 
 import numpy as np
 
 from src.agent import DQNAgent, Config
+from src.trading import TradingEnv
+
+env = TradingEnv(
+    dataset_path='./data/eurusd_hour.csv',
+    spread=0.0002,
+    period=200, sold=1000,
+    min_sold=0, nlot=0.1,
+    episode_lenght=1)
 
 
 DFOPEN = 0
@@ -20,9 +28,13 @@ DFLOW = 2
 DFCLOSE = 3
 
 BUY = 0
-SELL = 1
-CLOSE = 2
-HOLD = 3
+BUY_2 = 1
+SELL = 2
+SELL_2 = 3
+CLOSE = 4
+CLOSE_2 = 5
+CLOSE_3 = 6
+HOLD = 7
 
 """
 
@@ -44,19 +56,20 @@ class tick_processor():
 
         
         self.config = Config(target_update=10, 
-                lr=0.001,
-                lr_min=0.001, 
-                lr_decay=2000, 
-                gamma=0.50,
+                lr=0.001618033,
+                lr_min=0.001618033, 
+                lr_decay=1000, 
+                gamma=0.618033,
                 loss='huber', 
-                memory_size=161800, 
-                batch_size=30, 
+                memory_size=261800, 
+                batch_size=500, 
                 eps_start=0.01,
+#                 eps_start=0.1618033,
                 eps_min=0.01, 
-                eps_decay=1500)
+                eps_decay=1000)
 
-        self.agent = DQNAgent(config=self.config, id="1618")
-        self.agent.load(r"C:/Users/smonn/Desktop/DeepTrading/src/models/1618-1651689609.pt")
+        self.agent = DQNAgent(env=env, config=self.config, id="1618")
+        self.agent.load(r"C:/Users/smonn/Desktop/DeepTrading/src/models/1618-1652393286.pt")
 
         # if true, it will randomly try to open and close orders every few seconds. 
         self.open_test_trades = False
@@ -109,7 +122,7 @@ class tick_processor():
             time = datetime(int(year), int(month), int(day), int(hour), int(minute))
             
             end = time + timedelta(hours=1)
-            start = end - timedelta(hours=300)  # last 30 days
+            start = end - timedelta(hours=360)  # last 30 days
             self.dwx.get_historic_data(symbol, 'H1', start.timestamp(), end.timestamp())
             sleep(1)
             datas = self.dwx.historic_data[symbol + '_H1']
@@ -118,7 +131,7 @@ class tick_processor():
             for key in datas.keys():
                 row = [datas[key]['open'], datas[key]['high'], datas[key]['low'], datas[key]['close']]
                 res.append(row)
-            res = res[len(res) - 200 :len(res) + 1]
+            res = res[len(res) - 200  :len(res) + 1]
             
             if (self.res[0][0] != res[0][0]):
                 self.res = res
@@ -132,34 +145,28 @@ class tick_processor():
                     self.trade = 1
                     state = np.append(np.append(res, self.trade),self._take_profit(ask,bid))
 
-                action = self.agent._select_action(state,episode=1)
+                self.agent.play(state)
+                action = self.agent.action1
                 
-                print(self._take_profit(ask,bid))
-                print(self._take_profit(ask,bid))
-                print(self._take_profit(ask,bid))
-                print(self._take_profit(ask,bid))
-                print(self._take_profit(ask,bid))
-                print(self._take_profit(ask,bid))
-                print(self._take_profit(ask,bid))
-                if (action == BUY):
+                if (action == BUY or action == BUY_2):
                     print("BBBBBBBBBBBBUUUUUYYYYYYYYYYYY")
 
-                if (action == BUY and self.dwx.open_orders == {}):
+                if ((action == BUY or action == BUY_2) and self.dwx.open_orders == {}):
                     order_type = 'buy'
                     price = ask
                     self.buy_price = ask
                     self.spread = ask - bid
-                    self.dwx.open_order(symbol=symbol, order_type=order_type, stop_loss=price - self.spread * 2, magic=1618, price=price, lots=0.1)
-                if (action == SELL):
+                    self.dwx.open_order(symbol=symbol, order_type=order_type, stop_loss=price - self.spread, magic=1618, price=price, lots=1)
+                if (action == SELL or action == SELL_2):
                     print("SSSSSSSSSSSSEEEEEEEEEEEEEEEELLLLLLLL")
   
-                if (action == SELL and self.dwx.open_orders == {}):
+                if ((action == SELL  or action == SELL_2) and self.dwx.open_orders == {}):
                     order_type = 'sell'
                     price = bid
                     self.sell_price = bid
                     self.spread = ask - bid
-                    self.dwx.open_order(symbol=symbol, order_type=order_type, stop_loss=price + self.spread * 2, magic=1618, price=price, lots=0.1)
-                if (action == CLOSE):
+                    self.dwx.open_order(symbol=symbol, order_type=order_type, stop_loss=price + self.spread, magic=1618, price=price, lots=1)
+                if (action == CLOSE or action == CLOSE_2 or action == CLOSE_3):
                     print("CCCCCCCCLLLLLLLLLLLLOOOOOOOOSSSSSSEEEEEEE")
 
                     self.dwx.close_all_orders()
@@ -202,6 +209,7 @@ class tick_processor():
 
 # MT4_files_dir = 'C:/Users/smonn/AppData/Roaming/MetaQuotes/Terminal/AE2CC2E013FDE1E3CDF010AA51C60400/MQL5/Files'
 MT4_files_dir = 'C:/Users/smonn/AppData/Roaming/MetaQuotes/Tester/AE2CC2E013FDE1E3CDF010AA51C60400/Agent-127.0.0.1-3000/MQL5/Files'
+
 processor = tick_processor(MT4_files_dir)
 
 while processor.dwx.ACTIVE:

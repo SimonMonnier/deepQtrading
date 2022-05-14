@@ -21,14 +21,18 @@ DFCLOSE = 3
 #
 
 BUY = 0
-SELL = 1
-CLOSE = 2
-HOLD = 3
+BUY_2 = 1
+SELL = 2
+SELL_2 = 3
+CLOSE = 4
+CLOSE_2 = 5
+CLOSE_3 = 6
+HOLD = 7
 
 
 class TradingEnv():
     def __init__(self, dataset_path, spread, period, sold, min_sold, nlot, episode_lenght=1):
-        self.action_space = spaces.Discrete(4)
+        self.action_space = spaces.Discrete(8)
 
         self.spread = spread
         self.period = period
@@ -43,7 +47,7 @@ class TradingEnv():
         self.buy_price = None
         self.sell_price = None
         self.nstep = 0
-        self.max_step = 1640 * episode_lenght
+        self.max_step = 756 * episode_lenght
         self.episode_data = self._get_dataset_sample()
         self.state = self.episode_data[self.nstep:period]
         self.total_trade = 0
@@ -58,7 +62,7 @@ class TradingEnv():
     def _init_dataset(self, dataset_path, episode_lenght):
         df = pd.read_csv(dataset_path, sep=',')
         size = df.shape[0]
-        min_by_day = 1640 * episode_lenght
+        min_by_day = 756 * episode_lenght
         split_size = size / min_by_day
         split_dataset = np.array_split(df, split_size)
         return split_dataset
@@ -145,9 +149,9 @@ class TradingEnv():
 
         price = self.state[-1][DFCLOSE]
 
-        # TEEEEESSSSSTTTTT
+        
         if self.trade == True and self._check_stoploss() * self.nlot < -2 or self._take_profit() * self.nlot < -2 :
-            reward = -10000
+            reward = -1
             self.trade = False
             if self._take_profit() * self.nlot <= 0:
                 self.sold = self.sold - 4
@@ -160,72 +164,64 @@ class TradingEnv():
             self.buy_price = None
             self.sell_price = None
 
-        if self.trade == False and action == BUY:
+        if self.trade == False and (action == BUY or action == BUY_2):
             self.trade = True
             self.total_trade += 1
             self.buy_price = price
             # print("BUY :", self._get_profit() * self.nlot)
             if self._get_profit() > 0:
-                reward = 400
+                reward = 1
             elif self._get_profit() < 0:
-                reward = -100
+                reward = -1
             else:
                 reward = 0
 
-        if self.trade == False and action == SELL:
+        if self.trade == False and (action == SELL or action == SELL_2):
             self.trade = True
             self.total_trade += 1
             self.sell_price = price
             # print("SELL :", self._get_profit() * self.nlot)
             if self._get_profit() > 0:
-                reward = 400
+                reward = 1
             elif self._get_profit() < 0:
-                reward = -50
+                reward = -1
             else:
                 reward = 0
-
-        if self.trade == True and (action == BUY or action == SELL):
-            reward = -40
+        
+        if self.trade == True and (action == BUY or action == BUY_2 or action == SELL or action == SELL_2):
+            reward = -1.5
 
         if action == HOLD and self.trade == True:
             # print("HOLD :", self._take_profit() * self.nlot)
             if self._get_profit() > 0:
-                reward = 100
+                reward = self._get_profit()
             elif self._get_profit() < 0:
-                reward = -100
-            else:
                 reward = -10
+            
         elif action == HOLD and self.trade == False:
-            if self._get_profit() > 0:
-                reward = 50
-            elif self._get_profit() < 0:
-                reward = -80
-            else:
-                reward = -60
+            reward = -10
             
 
-        if self.trade == True and action == CLOSE:
+        if self.trade == True and (action == CLOSE or action == CLOSE_2 or action == CLOSE_3):
             self.sold = (self._take_profit() * self.nlot) + self.sold
             self.trade_sold = self.sold
             # print("CLOSE", self._take_profit() * self.nlot)
             if self._take_profit() > 0:
-                reward = 1500
+                reward = 1 + self._get_profit()
             elif self._take_profit() < 0:
-                reward = -30
-            else:
-                reward = -10
+                reward = self._get_profit()
             self.buy_price = None
             self.sell_price = None
             self.trade = False
         
-        if self.trade == False and action == CLOSE:
-            reward = -50
+        if self.trade == False and (action == CLOSE or action == CLOSE_2 or action == CLOSE_3):
+            reward = -1.5
 
         if self.trade_sold < self.min_sold or self.sold < self.min_sold:
             done = True
             self.sold = (self._take_profit() * self.nlot) + self.sold
             self.trade_sold = self.sold
-            reward = -10000
+            reward = -100
 
         # Update state
         self.state = self.episode_data[self.nstep:(self.nstep+self.period)]
