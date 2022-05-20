@@ -7,9 +7,9 @@ class DQN(nn.Module):
     def __init__(self, n_state, n_action):
         super().__init__()
 
-        self.ll1 = nn.Linear(n_state, out_features=50)
-        self.ll2 = nn.Linear(in_features=50, out_features=74)
-        self.out_features = nn.Linear(in_features=74, out_features=n_action)
+        self.ll1 = nn.Linear(n_state, out_features=135)
+        self.ll2 = nn.Linear(in_features=135, out_features=90)
+        self.out_features = nn.Linear(in_features=90, out_features=n_action)
 
     def forward(self, input_t):
         input_t = F.relu(self.ll1(input_t))
